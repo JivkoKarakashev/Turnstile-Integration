@@ -1,11 +1,12 @@
 import express from "express";
 import cors, { CorsOptions } from "cors";
+// import { onRequest } from "firebase-functions/v2/https";
 
 import config from "./config";
 import { validateToken } from "./services/validateToken";
-import { successResponse, errorResponse } from "./utils/apiResponse";
+import { boundErrorResponse, boundSuccessResponse } from "./utils/buildResponse";
 import { CustomError } from "./types/customError";
-import { onRequest } from "firebase-functions/v2/https";
+import { errorHandler } from "./utils/errorHandler";
 
 const allowedOrigins = [
     'https://jivkokarakashev.dev',
@@ -36,16 +37,28 @@ const corsOptions: CorsOptions = {
 const verifyApp = express();
 verifyApp.use(express.json());
 verifyApp.use(cors(corsOptions));
-verifyApp.options('*', cors(corsOptions));
 
-verifyApp.get('/health', (req, res) => {
+verifyApp.get("/sync-error", (_req, _res) => {
+    // throw new Error("Synchronous error occurred!");
+    throw new CustomError(500, "Synchronous error occurred!");
+});
+
+verifyApp.get("/async-error", async (_req, _res, next) => {
+    try {
+        // await Promise.reject(new Error("Async error occurred!"));
+        await Promise.reject(new CustomError(500, "Async error occurred!"));
+    } catch (err) {
+        next(err);
+    }
+});
+
+verifyApp.get('/health', (_req, res) => {
     res.json({ ok: true, environment: config.env });
 });
 
-verifyApp.post('/verify-turnstile-widget', async (req, res) => {
+verifyApp.post('/verify-turnstile-widget', async (req, res, next) => {
     if (req.method !== "POST") {
-        res.status(405).send("Method Not Allowed");
-        return;
+        throw new CustomError(405, 'Method Not Allowed');
     }
     const secret = config.turnstile.secretKey;
     // console.log(`Secret: ${secret}`);
@@ -54,27 +67,39 @@ verifyApp.post('/verify-turnstile-widget', async (req, res) => {
     // console.log(req.body);
     try {
         const verified = await validateToken(secret, token);
-        return res.status(200).json(successResponse({ verified: verified }));
-    } catch (error) {
-        if (error instanceof CustomError) {
-            const { statusCode, message } = error;
-            return res.status(statusCode).json(errorResponse(message));
+        if (verified) {
+            return res.status(200).json(boundSuccessResponse());
         }
+    } catch (error) {
+        next(error);
     }
 });
-export const turnstileVerify = onRequest({ region: "europe-west1" }, verifyApp);
+
+if (config.env === 'development') {
+    verifyApp.listen(config.port, () => {
+        console.log(`Server is listening on port ${config.port}`);
+    });
+}
+
+verifyApp.use(errorHandler);
+
+// export const turnstileVerify = onRequest({ region: "europe-west1" }, verifyApp);
 
 // Proxy Turnstile JS loader
-export const apiProxy = onRequest({ region: "europe-west1" }, async (_req, res) => {
-    try {
-        const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/api.js");
-        const body = await response.text();
+// export const apiProxy = onRequest({ region: "europe-west1" }, async (_req, res) => {
+//     try {
+//         const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/api.js");
+//         const body = await response.text();
 
-        res.set("Content-Type", "application/javascript");
-        res.set("Cache-Control", "public, max-age=3600");
-        res.send(body);
-    } catch (err) {
-        console.error("Error proxying Turnstile API:", err);
-        res.status(500).send("Failed to load Turnstile script.");
-    }
-});
+//         res.set("Content-Type", "application/javascript");
+//         res.set("Cache-Control", "public, max-age=3600");
+//         res.send(body);
+//     } catch (err) {
+//         console.error("Error proxying Turnstile API:", err);
+//         res.status(500).send("Failed to load Turnstile script.");
+//     }
+// });
+
+export {
+    verifyApp,
+}

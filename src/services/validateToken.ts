@@ -1,5 +1,5 @@
 import { CustomError } from "../types/customError";
-import { TurnstileVerifyResponse } from "../types/turnstile";
+import { ApiResponse } from "../types/turnstile";
 import config from "../config";
 
 async function validateToken(secret: string, token: string): Promise<boolean> {
@@ -27,7 +27,7 @@ async function validateToken(secret: string, token: string): Promise<boolean> {
         throw new CustomError(502, 'Failed to reach Cloudflare!');
     }
 
-    const cfData = await cfRes.json() as TurnstileVerifyResponse;
+    const cfData = await cfRes.json() as ApiResponse;
     if (!cfData.success) {
         throw new CustomError(401, 'Turnstile verification failed!');
     }

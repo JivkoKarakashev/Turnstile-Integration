@@ -1,20 +1,33 @@
-interface TurnstileVerifyResponse {
-    success: boolean,
-    challenge_ts?: string,
-    hostname?: string,
-    'error-codes'?: string[],
-    action?: string,
-    cdata?: string
-}
+import { CustomError } from "./customError"
 
 interface ApiResponse {
     success: boolean,
-    data?: any,
-    error?: string,
-    codes?: string[] | undefined
+    challenge_ts?: string,
+    hostname?: string,
+    'error-codes': string[],
+    action?: string,
+    cdata?: string,
+    metadata?: {
+        ephemeral_id: string
+    }
+}
+
+interface SuccessData {
+    verified: boolean
+}
+
+interface ErrorData extends SuccessData {
+    error: Error | CustomError
+}
+
+interface ReturnResponse {
+    success: boolean,
+    data: SuccessData | ErrorData
 }
 
 export {
-    type TurnstileVerifyResponse,
-    type ApiResponse
+    type ApiResponse,
+    type SuccessData,
+    type ErrorData,
+    type ReturnResponse
 }
